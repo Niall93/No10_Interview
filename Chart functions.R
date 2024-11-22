@@ -182,26 +182,55 @@ simple_barchart <- function(.data,xcol,ycol,ordered = "none"){
     scale_y_continuous(expand=c(0,0)) 
 }
 
-stacked_barchart <- function(.data,Cat1_Col,Cat2_Col,ycol,perc=FALSE,flipped =TRUE){
+barchart <- function(.data,Cat1_Col,Cat2_Col,ycol,type="stack",flipped =TRUE,order=NULL){
+  
   
   .data <- .data |>
     dplyr::mutate(value = {{ycol}}) |>
     dplyr::mutate(GROUP = {{Cat1_Col}}) |>
     dplyr::mutate(GROUP2 = {{Cat2_Col}})
   
-  if(perc){
+  if(!is.null(order)){
+    if(length(unique(order))!=length(unique(.data$GROUP2))){
+      print(sort(unique(.data$GROUP2)))
+      stop("Sort list isnt identical to unique variables")
+    }
+    if(!identical(sort(unique(order)),sort(unique(as.character(.data$GROUP2))))){
+      print(sort(unique(.data$GROUP2)))
+      stop("Sort list isnt identical to unique variables")
+    }
+    if(flipped){
+      .data$GROUP2 <- factor(.data$GROUP2,levels = rev(order))
+    }else{
+      .data$GROUP2 <- factor(.data$GROUP2,levels = order)
+    }
+  }
+  if(!(type %in% c("stack", "perc stack", "cluster"))){
+    stop("Graph type must be one of: stack, perc stack, cluster")
+  }
+
+  if(type=="stack"){
   graph <-  ggplot(.data) +
-    geom_bar(aes(x = GROUP,y=value,fill=GROUP2),stat="identity",position="fill") +
-    scale_y_continuous(expand=c(0,0),labels = scales::percent) +
+    geom_bar(aes(x = GROUP,y=value,fill=GROUP2),stat="identity",position="stack") +
+    scale_y_continuous(expand=c(0,0),labels = scales::comma) +
     custom_ggplot_theme() 
-  }else{
+  }
+  if(type=="perc stack"){
     graph <-  ggplot(.data) +
-      geom_bar(aes(x = GROUP,y=value,fill=GROUP2),stat="identity") +
+      geom_bar(aes(x = GROUP,y=value,fill=GROUP2),stat="identity",position="fill") +
+      scale_y_continuous(expand=c(0,0),labels = scales::percent) +
+      custom_ggplot_theme() 
+  }
+  if(type=="cluster"){
+    graph <-  ggplot(.data) +
+      geom_bar(aes(x = GROUP,y=value,fill=GROUP2),stat="identity",width=0.4,position=position_dodge(0.5)) +
       scale_y_continuous(expand=c(0,0),labels = scales::comma) +
       custom_ggplot_theme() 
   }
   
   variable_count <- length(unique(.data$GROUP2))
+  
+  ordered_colours <- c("#12436D","#2073BC","#6BACE6","#0b2841","#b7c6d3")
   
   if(variable_count == 2){
     graph <- graph +
@@ -211,15 +240,15 @@ stacked_barchart <- function(.data,Cat1_Col,Cat2_Col,ycol,perc=FALSE,flipped =TR
       ggplot2::scale_fill_manual(values=c("#12436D","#28A197","#F46A25"))
   }else if(variable_count == 4){
     graph <- graph +
-      ggplot2::scale_fill_manual(values=c("#12436D","#28A197","#F46A25","#801650"))
+      ggplot2::scale_fill_manual(values=c("#12436D","#28A197","#801650","#F46A25"))
   }else if(variable_count == 5){
     graph <- graph +
-      ggplot2::scale_fill_manual(values=c("#12436D","#28A197","#F46A25","#801650","#3D3D3D"))
+      ggplot2::scale_fill_manual(values=c("#12436D","#28A197","#801650","#F46A25","#3D3D3D"))
   }else{
     stop("This function only allows for plotting up to 5 categories (lines) on one graph. If your grouping variable has more than 5 categories, it is suggested you use the facet_timeseries or facet_highlight_timeseries function")
   }
   
-  if(flipped){
+  if(flipped & type!="cluster"){
     graph <- graph +
       coord_flip() +
       theme(legend.position = "bottom") +
@@ -228,8 +257,23 @@ stacked_barchart <- function(.data,Cat1_Col,Cat2_Col,ycol,perc=FALSE,flipped =TR
             panel.grid.major.x = element_line(color = "lightgrey")  
       )
   }
+  if(flipped & type=="cluster"){
+    graph <- graph +
+      coord_flip() +
+      theme(legend.position = "right") +
+      guides(fill = guide_legend(reverse = TRUE)) +
+      theme(panel.grid.major.y = element_blank(),
+            panel.grid.major.x = element_line(color = "lightgrey")  
+      )
+  }
+  if(!flipped & type=="cluster"){
+    graph <- graph +
+      theme(legend.position = "top") 
+      
+  }
   graph
 }
 
-stacked_barchart(example_data,category1,category2,value,perc=F)
-
+barchart(example_data,category1,category2,value,type="cluster",flipped=F) +
+  labs(fill = "",x="",y="Total Sales",) +
+  theme(axis.title.x = element_text(hjust=1))
